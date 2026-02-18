@@ -33,6 +33,19 @@ inline Eigen::Vector3f parse_vector(const nlohmann::json& arr) {
     return Eigen::Vector3f(arr[0].get<float>(), arr[1].get<float>(), arr[2].get<float>());
 }
 
+inline Eigen::Affine3f parse_transform(const nlohmann::json& arr) {
+    if (arr.size() != 16) {
+        throw std::runtime_error("Transform must contain 16 elements");
+    }
+    Eigen::Matrix4f m;
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            m(i, j) = arr[i * 4 + j].get<float>();
+        }
+    }
+    return Eigen::Affine3f(m);
+}
+
 inline bool parse_geometry(const nlohmann::json& json_data, Geometry_List& world_geometry) {
     for (auto itr = json_data["geometry"].begin(); itr != json_data["geometry"].end(); itr++) {
         if (!itr->contains("type")) {
@@ -44,17 +57,28 @@ inline bool parse_geometry(const nlohmann::json& json_data, Geometry_List& world
         if (type == "sphere") {
             Eigen::Vector3f centre = parse_vector((*itr)["centre"]);
             float radius = (*itr)["radius"].get<float>();
-            world_geometry.add(std::make_shared<Sphere>(centre, radius));
+            auto sphere = std::make_shared<Sphere>(centre, radius);
+            if (itr->contains("transform")) {
+                sphere->set_transform(parse_transform((*itr)["transform"]));
+            }
+            world_geometry.add(sphere);
+
         } else if (type == "rectangle") {
             Eigen::Vector3f p1 = parse_vector((*itr)["p1"]);
             Eigen::Vector3f p2 = parse_vector((*itr)["p2"]);
             Eigen::Vector3f p3 = parse_vector((*itr)["p3"]);
             Eigen::Vector3f p4 = parse_vector((*itr)["p4"]);
-            world_geometry.add(std::make_shared<Rectangle>(p1, p2, p3, p4));
+            auto rectangle = std::make_shared<Rectangle>(p1, p2, p3, p4);
+            if (itr->contains("transform")) {
+                rectangle->set_transform(parse_transform((*itr)["transform"]));
+            }
+            world_geometry.add(rectangle);
+
         } else {
             std::cout << "Fatal error: invalid geometry type: " << type << std::endl;
             return false;
         }
+
     }
     return true;
 }

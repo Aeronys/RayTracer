@@ -12,6 +12,16 @@ class Rectangle : public Geometry {
             plane_normal = edge1.cross(edge2).normalized();
         }
 
+        void set_transform(const Eigen::Affine3f& t) override {
+            p1 = t * p1;
+            p2 = t * p2;
+            p3 = t * p3;
+            p4 = t * p4;
+            edge1 = p2 - p1;
+            edge2 = p4 - p1;
+            plane_normal = edge1.cross(edge2).normalized();
+        }
+
         bool intersect(const Ray& ray, const Interval& ray_t, Intersection_Log& intersection_log) const override {
             
 
