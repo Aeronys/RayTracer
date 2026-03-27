@@ -1,5 +1,6 @@
 #include "RayTracer.h"
 #include "geometry_list.h"
+#include "light.h"
 
 #include <iostream>
 
@@ -9,7 +10,8 @@ RayTracer::RayTracer(const nlohmann::json& j) : json_data(j) {}
 
 void RayTracer::run() {
     Geometry_List world_geometry;
-    if (!parse_geometry(json_data, world_geometry)) {
+    std::vector<PointLight> world_lights;
+    if (!parse_geometry(json_data, world_geometry) || !parse_lights(json_data, world_lights)) {
         return;
     }
 
@@ -23,6 +25,6 @@ void RayTracer::run() {
                       params.ai, params.bkc, params.width, params.height,
                       params.globalillum, params.probterminate,
                       params.antialiasing, params.twosiderender);
-        camera.render(world_geometry, params.filename);
+        camera.render(world_geometry, world_lights, params.filename);
     }
 }

@@ -16,30 +16,40 @@ class Sphere : public Geometry {
                 ray = transform_ray(ray);
             }
 
+            // calculate quadratic equation coefficients
             Eigen::Vector3f oc = centre - ray.get_origin();
             float a = ray.get_direction().squaredNorm();
             float h = ray.get_direction().dot(oc);
             float c = oc.squaredNorm() - (radius * radius);
 
+            // calculate discriminant
             float discriminant = h * h - a * c;
+
+            // check if discriminant is negative (negative means no intersections)
             if (discriminant < 0.0f) {
                 return false;
             }
 
+            // calculate roots
             float sqrt_discriminant = std::sqrt(discriminant);
             float root = (h - sqrt_discriminant) / a;
 
+            // check if root is within ray_t interval
             if (!ray_t.surrounds(root)) {
+                // calculate second root
                 root = (h + sqrt_discriminant) / a;
                 if (!ray_t.surrounds(root)) {
                     return false;
                 }
             }
 
+            // add to intersection log
             intersection_log.t = root;
             intersection_log.point = ray.at(intersection_log.t);
             intersection_log.normal = (intersection_log.point - centre) / radius;
+            intersection_log.material = material;
 
+            // apply transform if applicable
             if (has_transform()) {
                 transform_hit(intersection_log);
             }

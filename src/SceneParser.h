@@ -3,6 +3,7 @@
 
 #include "geometry_list.h"
 #include "json.hpp"
+#include "light.h"
 #include "rectangle.h"
 #include "sphere.h"
 
@@ -11,6 +12,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 struct OutputParams {
     std::string filename;
@@ -46,6 +48,7 @@ inline Eigen::Affine3f parse_transform(const nlohmann::json& arr) {
     return Eigen::Affine3f(m);
 }
 
+// parse all geometry objects from the json data
 inline bool parse_geometry(const nlohmann::json& json_data, Geometry_List& world_geometry) {
     for (auto itr = json_data["geometry"].begin(); itr != json_data["geometry"].end(); itr++) {
         if (!itr->contains("type")) {
@@ -53,36 +56,135 @@ inline bool parse_geometry(const nlohmann::json& json_data, Geometry_List& world
             return false;
         }
 
+        if (itr->contains("visible") && !(*itr)["visible"].get<bool>()) {
+            continue;
+        }
+
+        // parse geometry type
         std::string type = (*itr)["type"].get<std::string>();
+        std::shared_ptr<Geometry> geometry;
         if (type == "sphere") {
             Eigen::Vector3f centre = parse_vector((*itr)["centre"]);
             float radius = (*itr)["radius"].get<float>();
-            auto sphere = std::make_shared<Sphere>(centre, radius);
-            if (itr->contains("transform")) {
-                sphere->set_transform(parse_transform((*itr)["transform"]));
-            }
-            world_geometry.add(sphere);
+            geometry = std::make_shared<Sphere>(centre, radius);
 
         } else if (type == "rectangle") {
             Eigen::Vector3f p1 = parse_vector((*itr)["p1"]);
             Eigen::Vector3f p2 = parse_vector((*itr)["p2"]);
             Eigen::Vector3f p3 = parse_vector((*itr)["p3"]);
             Eigen::Vector3f p4 = parse_vector((*itr)["p4"]);
-            auto rectangle = std::make_shared<Rectangle>(p1, p2, p3, p4);
-            if (itr->contains("transform")) {
-                rectangle->set_transform(parse_transform((*itr)["transform"]));
-            }
-            world_geometry.add(rectangle);
+            geometry = std::make_shared<Rectangle>(p1, p2, p3, p4);
 
         } else {
             std::cout << "Fatal error: invalid geometry type: " << type << std::endl;
             return false;
         }
 
+        // parse material properties
+        if (!itr->contains("ac")) {
+            std::cout << "Fatal error: geometry must always contain 'ac' (ambient color)" << std::endl;
+            return false;
+        }
+        geometry->material.ac = parse_vector((*itr)["ac"]);
+
+        if (!itr->contains("dc")) {
+            std::cout << "Fatal error: geometry must always contain 'dc' (diffuse color)" << std::endl;
+            return false;
+        }
+        geometry->material.dc = parse_vector((*itr)["dc"]);
+
+        if (!itr->contains("sc")) {
+            std::cout << "Fatal error: geometry must always contain 'sc' (specular color)" << std::endl;
+            return false;
+        }
+        geometry->material.sc = parse_vector((*itr)["sc"]);
+
+        if (!itr->contains("ka")) {
+            std::cout << "Fatal error: geometry must always contain 'ka' (ambient coefficient)" << std::endl;
+            return false;
+        }
+        geometry->material.ka = (*itr)["ka"].get<float>();
+
+        if (!itr->contains("kd")) {
+            std::cout << "Fatal error: geometry must always contain 'kd' (diffuse coefficient)" << std::endl;
+            return false;
+        }
+        geometry->material.kd = (*itr)["kd"].get<float>();
+
+        if (!itr->contains("ks")) {
+            std::cout << "Fatal error: geometry must always contain 'ks' (specular coefficient)" << std::endl;
+            return false;
+        }
+        geometry->material.ks = (*itr)["ks"].get<float>();
+
+        if (!itr->contains("pc")) {
+            std::cout << "Fatal error: geometry must always contain 'pc' (phong exponent)" << std::endl;
+            return false;
+        }
+        geometry->material.pc = (*itr)["pc"].get<float>();
+
+        // parse transform (if it exists)
+        if (itr->contains("transform")) {
+            geometry->set_transform(parse_transform((*itr)["transform"]));
+        }
+
+        // add the geometry to the world
+        world_geometry.add(geometry);
+
     }
     return true;
 }
 
+// parse all the light objects from the json data
+inline bool parse_lights(const nlohmann::json& json_data, std::vector<PointLight>& world_lights) {
+    for (auto itr = json_data["light"].begin(); itr != json_data["light"].end(); itr++) {
+        if (!itr->contains("type")) {
+            std::cout << "Fatal error: light must always contain a type" << std::endl;
+            return false;
+        }
+
+        // skip light if it is not used
+        if (itr->contains("use") && !(*itr)["use"].get<bool>()) {
+            continue;
+        }
+
+        // parse light type
+        std::string type = (*itr)["type"].get<std::string>();
+
+        if (type == "point") {
+            PointLight light;
+            if (!itr->contains("centre")) {
+                std::cout << "Fatal error: point light must always contain a centre" << std::endl;
+                return false;
+            }
+            light.centre = parse_vector((*itr)["centre"]);
+
+            if (!itr->contains("id")) {
+                std::cout << "Fatal error: point light must always contain an id" << std::endl;
+                return false;
+            }
+            light.id = parse_vector((*itr)["id"]);
+
+            if (!itr->contains("is")) {
+                std::cout << "Fatal error: point light must always contain an is" << std::endl;
+                return false;
+            }
+            light.is = parse_vector((*itr)["is"]);
+
+            world_lights.push_back(light);
+
+        } else if (type == "area") {
+            std::cout << "Skipping area lights for now" << std::endl;
+        } else {
+            std::cout << "Fatal error: invalid light type: " << type << std::endl;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// parse all the output parameters from the json data
 inline bool parse_output(const nlohmann::json& json_data, OutputParams& params) {
     if (!json_data.contains("filename")) {
         std::cout << "Fatal error: output must always contain a filename" << std::endl;
