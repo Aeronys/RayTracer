@@ -23,6 +23,7 @@ struct OutputParams {
     bool globalillum = false;
     float probterminate = 0.0f;
     bool antialiasing = false;
+    std::vector<unsigned int> raysperpixel;
     bool twosiderender = true;
 };
 
@@ -136,7 +137,9 @@ inline bool parse_geometry(const nlohmann::json& json_data, Geometry_List& world
 }
 
 // parse all the light objects from the json data
-inline bool parse_lights(const nlohmann::json& json_data, std::vector<PointLight>& world_lights) {
+inline bool parse_lights(const nlohmann::json& json_data,
+                         std::vector<PointLight>& point_lights,
+                         std::vector<AreaLight>& area_lights) {
     for (auto itr = json_data["light"].begin(); itr != json_data["light"].end(); itr++) {
         if (!itr->contains("type")) {
             std::cout << "Fatal error: light must always contain a type" << std::endl;
@@ -148,36 +151,56 @@ inline bool parse_lights(const nlohmann::json& json_data, std::vector<PointLight
             continue;
         }
 
-        // parse light type
         std::string type = (*itr)["type"].get<std::string>();
+        if (type != "point" && type != "area") {
+            std::cout << "Fatal error: invalid light type: " << type << std::endl;
+            return false;
+        }
+
+        if (!itr->contains("id")) {
+            std::cout << "Fatal error: light must always contain an id" << std::endl;
+            return false;
+        }
+        if (!itr->contains("is")) {
+            std::cout << "Fatal error: light must always contain an is" << std::endl;
+            return false;
+        }
+        Color id = parse_vector((*itr)["id"]);
+        Color is = parse_vector((*itr)["is"]);
 
         if (type == "point") {
-            PointLight light;
             if (!itr->contains("centre")) {
                 std::cout << "Fatal error: point light must always contain a centre" << std::endl;
                 return false;
             }
+            PointLight light;
             light.centre = parse_vector((*itr)["centre"]);
+            light.id = id;
+            light.is = is;
+            point_lights.push_back(light);
 
-            if (!itr->contains("id")) {
-                std::cout << "Fatal error: point light must always contain an id" << std::endl;
-                return false;
-            }
-            light.id = parse_vector((*itr)["id"]);
-
-            if (!itr->contains("is")) {
-                std::cout << "Fatal error: point light must always contain an is" << std::endl;
-                return false;
-            }
-            light.is = parse_vector((*itr)["is"]);
-
-            world_lights.push_back(light);
-
-        } else if (type == "area") {
-            std::cout << "Skipping area lights for now" << std::endl;
         } else {
-            std::cout << "Fatal error: invalid light type: " << type << std::endl;
-            return false;
+            if (!itr->contains("p1") || !itr->contains("p2") || !itr->contains("p3") || !itr->contains("p4")) {
+                std::cout << "Fatal error: area light must always contain p1, p2, p3, and p4" << std::endl;
+                return false;
+            }
+            AreaLight light;
+            light.p1 = parse_vector((*itr)["p1"]);
+            light.p2 = parse_vector((*itr)["p2"]);
+            light.p3 = parse_vector((*itr)["p3"]);
+            light.p4 = parse_vector((*itr)["p4"]);
+            light.id = id;
+            light.is = is;
+            if (itr->contains("n")) {
+                light.n = (*itr)["n"].get<int>();
+                if (light.n < 1) {
+                    light.n = 1;
+                }
+            }
+            if (itr->contains("usecenter")) {
+                light.usecenter = (*itr)["usecenter"].get<bool>();
+            }
+            area_lights.push_back(light);
         }
     }
 
@@ -255,6 +278,9 @@ inline bool parse_output(const nlohmann::json& json_data, OutputParams& params) 
     }
     if (json_data.contains("antialiasing")) {
         params.antialiasing = json_data["antialiasing"].get<bool>();
+    }
+    if (json_data.contains("raysperpixel")) {
+        params.raysperpixel = json_data["raysperpixel"].get<std::vector<unsigned int>>();
     }
     if (json_data.contains("twosiderender")) {
         params.twosiderender = json_data["twosiderender"].get<bool>();

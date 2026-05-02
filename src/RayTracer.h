@@ -1,7 +1,7 @@
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
-#include "Camera.h"
+#include "camera.h"
 #include "SceneParser.h"
 
 #include "json.hpp"
